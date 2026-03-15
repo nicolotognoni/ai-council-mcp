@@ -24,26 +24,39 @@ export function AgentNode({
   return (
     <div className="absolute flex flex-col items-center" style={style}>
       {/* Agent circle */}
-      <div
-        className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl border-3 transition-all duration-500 ${
-          isThinking ? "agent-thinking" : ""
-        } ${isResponded || isVoted ? "scale-110" : ""}`}
-        style={{
-          borderColor: status === "waiting" ? "transparent" : agent.color,
-          backgroundColor: agent.color + "15",
-          boxShadow: isResponded || isVoted ? `0 0 20px ${agent.color}30` : "none",
-        }}
-      >
-        {agent.emoji}
+      <div className="relative">
+        {/* Conic gradient spinner for thinking */}
+        {(isThinking || isVoting) && (
+          <div
+            className="absolute -inset-1 rounded-full conic-spinner"
+            style={{
+              background: `conic-gradient(${agent.color}, transparent 60%, ${agent.color})`,
+              mask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px))",
+              WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px))",
+            }}
+          />
+        )}
+        <div
+          className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl border-2 transition-all duration-500 ${
+            isResponded || isVoted ? "bounce-in scale-105" : ""
+          }`}
+          style={{
+            borderColor: status === "waiting" ? "transparent" : agent.color,
+            backgroundColor: agent.color + "15",
+            boxShadow: isResponded || isVoted ? `0 0 24px ${agent.color}30` : "none",
+          }}
+        >
+          {agent.emoji}
+        </div>
       </div>
 
       {/* Agent name */}
-      <span className="text-[10px] font-semibold text-default mt-1 whitespace-nowrap">
+      <span className="text-[10px] font-semibold text-default mt-1.5 whitespace-nowrap">
         {agent.name.replace("The ", "")}
       </span>
 
       {/* Status indicator */}
-      {isThinking && (
+      {(isThinking || isVoting) && (
         <div className="flex gap-0.5 mt-1">
           <div className="w-1 h-1 rounded-full thinking-dot" style={{ backgroundColor: agent.color }} />
           <div className="w-1 h-1 rounded-full thinking-dot" style={{ backgroundColor: agent.color, animationDelay: "0.2s" }} />
@@ -62,8 +75,8 @@ export function AgentNode({
 
       {/* Vote indicator */}
       {isVoted && votedForEmoji && (
-        <div className="mt-1 text-xs fade-in">
-          → {votedForEmoji}
+        <div className="mt-1 text-xs bounce-in">
+          &rarr; {votedForEmoji}
         </div>
       )}
     </div>

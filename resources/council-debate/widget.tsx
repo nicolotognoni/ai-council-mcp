@@ -45,7 +45,7 @@ export default function CouncilDebate() {
           <div className="text-center py-12">
             <div className="text-4xl mb-4 animate-bounce">&#9878;&#65039;</div>
             <h3 className="text-lg font-semibold text-default mb-2">
-              The Council is deliberating...
+              Assembling the Council...
             </h3>
             <p className="text-sm text-secondary">
               5 AI agents are debating across 4 rounds
@@ -74,9 +74,9 @@ export default function CouncilDebate() {
     <McpUseProvider autoSize>
       <div className="bg-surface-elevated border border-default rounded-3xl overflow-hidden">
         {/* Header */}
-        <div className="px-6 pt-6 pb-3">
+        <div className="px-6 pt-6 pb-4">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-medium text-secondary uppercase tracking-wide">
+            <span className="text-xs font-medium text-secondary uppercase tracking-widest">
               Council Debate
             </span>
             <span className="text-xs text-secondary">&middot;</span>
@@ -84,7 +84,7 @@ export default function CouncilDebate() {
               {agents.length} agents &middot; {rounds.length} rounds
             </span>
           </div>
-          <h2 className="text-lg font-bold text-default leading-snug">
+          <h2 className="text-xl font-bold text-default leading-snug">
             &ldquo;{question}&rdquo;
           </h2>
         </div>
@@ -102,7 +102,7 @@ export default function CouncilDebate() {
         />
 
         {/* Messages */}
-        <div className="py-2">
+        <div className="py-3">
           {activeRound < 3 ? (
             currentRound.map((message) => {
               const agent = agents.find((a) => a.id === message.agentId);

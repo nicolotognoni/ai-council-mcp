@@ -46,7 +46,7 @@ server.tool(
       debateStore.createDebate(debateId);
 
       // Wait for the widget's SSE client to connect before starting the debate
-      await debateStore.waitForClient(debateId, 5000);
+      await debateStore.waitForClient(debateId, 15000);
 
       const result = await runDebate(question, debateId);
 
@@ -98,6 +98,9 @@ server.app.get("/api/debate-stream/:debateId", (c) => {
       await stream.writeSSE({ event: event.type, data: JSON.stringify(event) });
     };
     debateStore.subscribe(debateId, onEvent);
+
+    // Signal that the SSE connection is active
+    await stream.writeSSE({ event: "connected", data: JSON.stringify({ debateId }) });
 
     // Send catch-up: replay individual events so the widget can animate them
     const state = debateStore.getState(debateId);

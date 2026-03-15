@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import type { Agent, Message } from "../types";
 import { MarkdownContent } from "./MarkdownContent";
 
@@ -7,6 +7,11 @@ const providerBadge: Record<string, { label: string; bg: string }> = {
   anthropic: { label: "Anthropic", bg: "bg-[#D97706]/15 text-[#D97706]" },
   google: { label: "Google", bg: "bg-[#4285F4]/15 text-[#4285F4]" },
 };
+
+function getFirstSentence(text: string): string {
+  const match = text.match(/^[^.!?]*[.!?]/);
+  return match ? match[0].trim() : text.slice(0, 120);
+}
 
 export function MessageBubble({
   message,
@@ -20,16 +25,15 @@ export function MessageBubble({
   onToggle: () => void;
 }) {
   const badge = providerBadge[agent.provider];
-  const lines = message.content.split("\n");
-  const isLong = lines.length > 4 || message.content.length > 300;
-  const displayContent = isExpanded
-    ? message.content
-    : isLong
-      ? message.content.slice(0, 280) + "..."
-      : message.content;
+  const firstSentence = getFirstSentence(message.content);
+  const isLong = message.content.length > 120 || message.content !== firstSentence;
+  const displayContent = isExpanded ? message.content : firstSentence;
 
   return (
-    <div className="flex gap-3 px-6 py-2">
+    <div
+      className="flex gap-3 px-6 py-2"
+      style={{ borderLeft: `3px solid ${agent.color}` }}
+    >
       <div
         className="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0"
         style={{ backgroundColor: agent.color + "20" }}
@@ -56,7 +60,7 @@ export function MessageBubble({
             onClick={onToggle}
             className="text-xs text-info hover:underline mt-1 cursor-pointer"
           >
-            {isExpanded ? "Show less" : "Read more"}
+            {isExpanded ? "Collapse" : "Full response"}
           </button>
         )}
       </div>

@@ -15,21 +15,27 @@ export function WinnerCard({
 }) {
   return (
     <div
-      className="mx-6 my-3 rounded-2xl border-2 p-5 relative overflow-hidden"
+      className="mx-6 my-4 rounded-2xl border-2 p-5 relative overflow-hidden slide-up shimmer-overlay bg-surface-elevated"
       style={{
         borderColor: agent.color,
-        background: `linear-gradient(135deg, ${agent.color}08, ${agent.color}15)`,
       }}
     >
       <div
-        className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-20"
+        className="absolute top-0 right-0 w-40 h-40 rounded-full blur-3xl opacity-20"
+        style={{ backgroundColor: agent.color }}
+      />
+      <div
+        className="absolute bottom-0 left-0 w-24 h-24 rounded-full blur-2xl opacity-10"
         style={{ backgroundColor: agent.color }}
       />
       <div className="relative">
         <div className="flex items-center gap-3 mb-3">
           <div
-            className="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
-            style={{ backgroundColor: agent.color + "25" }}
+            className="w-14 h-14 rounded-full flex items-center justify-center text-4xl"
+            style={{
+              backgroundColor: agent.color + "25",
+              boxShadow: `0 0 24px ${agent.color}30`,
+            }}
           >
             {agent.emoji}
           </div>

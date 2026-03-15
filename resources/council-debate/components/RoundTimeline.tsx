@@ -15,29 +15,44 @@ export function RoundTimeline({
   onRoundChange: (round: number) => void;
 }) {
   return (
-    <div className="flex gap-1 px-6 py-2">
+    <div className="relative flex gap-1 px-6 py-3">
+      {/* Connecting line */}
+      <div
+        className="absolute left-10 right-10 top-1/2 h-px bg-default/10"
+        style={{ transform: "translateY(-2px)" }}
+      />
+
       {roundLabels.map((r, i) => {
         const isActive = i === activeRound;
+        const isPast = i < activeRound;
         return (
           <button
             key={i}
             onClick={() => onRoundChange(i)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+            className={`relative flex-1 flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
               isActive
                 ? "bg-default/10 text-default shadow-sm"
                 : "text-secondary hover:bg-default/5"
             }`}
+            style={{
+              boxShadow: isActive ? "0 0 12px rgba(59,130,246,0.15)" : "none",
+            }}
           >
             <span
-              className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold ${
+              className={`w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-bold transition-all ${
                 isActive
                   ? "bg-default text-surface"
-                  : "bg-default/10 text-secondary"
+                  : isPast
+                    ? "bg-default/20 text-default"
+                    : "bg-default/10 text-secondary"
               }`}
+              style={{
+                boxShadow: isActive ? "0 0 8px rgba(59,130,246,0.3)" : "none",
+              }}
             >
               {r.icon}
             </span>
-            <span className="hidden sm:inline">{r.label}</span>
+            <span className="hidden sm:inline text-[10px]">{r.label}</span>
           </button>
         );
       })}

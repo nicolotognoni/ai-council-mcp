@@ -35,25 +35,32 @@ export function LiveDebateView({ question }: { question: string }) {
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [votes, setVotes] = useState<LiveVote[]>([]);
   const [currentRound, setCurrentRound] = useState(1);
-  const [status, setStatus] = useState<"connecting" | "running" | "voting" | "complete">("connecting");
+  const [status, setStatus] = useState<"connecting" | "running" | "voting" | "complete" | "error">("connecting");
   const [thinkingAgents, setThinkingAgents] = useState<Set<string>>(new Set());
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const retryCountRef = useRef(0);
 
-  useEffect(() => {
+  const respondedCount = messages.filter((m) => m.round === currentRound).length;
+
+  const connect = () => {
     const debateId = hashQuestion(question);
-    const baseUrl = window.location.origin;
-    const es = new EventSource(`${baseUrl}/api/debate-stream/${debateId}`);
+    const es = new EventSource(`/api/debate-stream/${debateId}`);
     eventSourceRef.current = es;
+    setConnectionError(null);
+    setStatus("connecting");
 
     es.onopen = () => {
-      setStatus("running");
-      // Initially all agents are thinking in round 1
-      setThinkingAgents(new Set(agents.map((a) => a.id)));
+      retryCountRef.current = 0;
     };
+
+    es.addEventListener("connected", () => {
+      setStatus("running");
+      setThinkingAgents(new Set(agents.map((a) => a.id)));
+    });
 
     es.addEventListener("state", (e) => {
       const state = JSON.parse(e.data);
-      // State event now only carries status/currentRound (messages come as individual events)
       if (state.currentRound) setCurrentRound(state.currentRound);
       if (state.status && state.status !== "waiting") {
         setStatus(state.status === "waiting" ? "running" : state.status);
@@ -64,7 +71,6 @@ export function LiveDebateView({ question }: { question: string }) {
       const data = JSON.parse(e.data);
       setStatus("running");
       setMessages((prev) => {
-        // Avoid duplicates (catch-up + live events)
         const exists = prev.some((m) => m.agentId === data.agentId && m.round === data.round);
         if (exists) return prev;
         return [...prev, { agentId: data.agentId, content: data.content, round: data.round }];
@@ -79,7 +85,6 @@ export function LiveDebateView({ question }: { question: string }) {
 
     es.addEventListener("round-complete", (e) => {
       const data = JSON.parse(e.data);
-      // Next round: all agents start thinking again
       if (data.round < 3) {
         setCurrentRound(data.round + 1);
         setThinkingAgents(new Set(agents.map((a) => a.id)));
@@ -107,9 +112,19 @@ export function LiveDebateView({ question }: { question: string }) {
     });
 
     es.onerror = () => {
-      // EventSource auto-retries; no action needed
+      retryCountRef.current++;
+      if (retryCountRef.current >= 5) {
+        es.close();
+        setStatus("error");
+        setConnectionError("Unable to connect to the debate stream. The server may be unavailable.");
+      }
     };
 
+    return es;
+  };
+
+  useEffect(() => {
+    const es = connect();
     return () => {
       es.close();
     };
@@ -148,15 +163,37 @@ export function LiveDebateView({ question }: { question: string }) {
     });
   }
 
-  const roundLabel = status === "voting" ? "Voting" : `Round ${currentRound}`;
+  if (status === "error" && connectionError) {
+    return (
+      <div className="bg-surface-elevated border border-default rounded-3xl p-8">
+        <div className="text-center py-8">
+          <div className="text-3xl mb-3">&#x26A0;&#xFE0F;</div>
+          <h3 className="text-base font-semibold text-default mb-2">Connection Lost</h3>
+          <p className="text-sm text-secondary mb-4">{connectionError}</p>
+          <button
+            onClick={() => {
+              retryCountRef.current = 0;
+              eventSourceRef.current?.close();
+              connect();
+            }}
+            className="px-4 py-2 text-sm font-medium rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-colors cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const roundLabels = ["Proposal", "Critique", "Refinement", "Vote"];
 
   return (
     <div className="bg-surface-elevated border border-default rounded-3xl p-6">
       <div className="text-center mb-2">
-        <span className="text-xs font-medium text-secondary uppercase tracking-wide">
+        <span className="text-xs font-medium text-secondary uppercase tracking-widest">
           Council Debate — Live
         </span>
-        <h2 className="text-lg font-bold text-default leading-snug mt-1">
+        <h2 className="text-xl font-bold text-default leading-snug mt-1">
           &ldquo;{question}&rdquo;
         </h2>
       </div>
@@ -170,38 +207,69 @@ export function LiveDebateView({ question }: { question: string }) {
 
       <div className="text-center mt-2">
         <span
-          className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full"
+          className="inline-flex items-center gap-2 text-sm font-medium px-4 py-1.5 rounded-full"
           style={{
-            backgroundColor: status === "complete" ? "#10B98120" : "#3B82F620",
-            color: status === "complete" ? "#10B981" : "#3B82F6",
+            backgroundColor: status === "complete" ? "#10B98120" : status === "voting" ? "#F59E0B20" : "#3B82F620",
+            color: status === "complete" ? "#10B981" : status === "voting" ? "#F59E0B" : "#3B82F6",
+            boxShadow: status === "voting" ? "0 0 20px rgba(245,158,11,0.15)" : "none",
           }}
         >
           {status === "connecting" && (
             <>
-              <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
-              Connecting...
+              <span className="w-2 h-2 rounded-full bg-current shimmer" />
+              Assembling the Council...
             </>
           )}
           {status === "running" && (
             <>
               <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
-              {roundLabel} in progress
+              {roundLabels[currentRound - 1]} (Round {currentRound}) — {respondedCount}/{agents.length} responded
             </>
           )}
           {status === "voting" && (
             <>
-              <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
-              Agents are voting...
+              <span className="w-2 h-2 rounded-full bg-current glow-pulse" />
+              Voting — {votes.length}/{agents.length} cast
             </>
           )}
           {status === "complete" && (
             <>
-              <span className="w-2 h-2 rounded-full bg-current" />
+              <span className="text-xs">&#x2705;</span>
               Debate complete!
             </>
           )}
         </span>
       </div>
+
+      {/* Live vote feed */}
+      {(status === "voting" || status === "complete") && votes.length > 0 && (
+        <div className="mt-4 space-y-1.5 px-2">
+          <div className="text-xs font-semibold text-secondary uppercase tracking-wide text-center mb-2">
+            Votes
+          </div>
+          {votes.map((vote, i) => {
+            const voter = agents.find((a) => a.id === vote.voterId);
+            const votedFor = agents.find((a) => a.id === vote.votedForId);
+            if (!voter || !votedFor) return null;
+            return (
+              <div
+                key={i}
+                className="flex items-center gap-2 text-xs text-secondary px-3 py-1.5 rounded-lg fade-in"
+                style={{ backgroundColor: votedFor.color + "10" }}
+              >
+                <span className="text-base">{voter.emoji}</span>
+                <span className="font-medium text-default">{voter.name.replace("The ", "")}</span>
+                <span>&rarr;</span>
+                <span className="text-base">{votedFor.emoji}</span>
+                <span className="font-medium text-default">{votedFor.name.replace("The ", "")}</span>
+                {vote.reason && (
+                  <span className="text-secondary italic ml-auto truncate max-w-[200px]">&ldquo;{vote.reason}&rdquo;</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -28,7 +28,15 @@ export function VoteResults({
           const pct = Math.round((count / totalVoters) * 100);
           const isWinner = agentId === winnerId;
           return (
-            <div key={agentId} className="space-y-1">
+            <div
+              key={agentId}
+              className="space-y-1"
+              style={{
+                boxShadow: isWinner ? `0 0 12px ${agent.color}20` : "none",
+                borderRadius: 8,
+                padding: isWinner ? "4px 0" : undefined,
+              }}
+            >
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5">
                   <span>{agent.emoji}</span>
@@ -47,12 +55,14 @@ export function VoteResults({
                   {count}/{totalVoters} votes
                 </span>
               </div>
-              <div className="h-2 bg-default/5 rounded-full overflow-hidden">
+              <div className="h-2.5 bg-default/5 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full transition-all duration-500"
+                  className="h-full rounded-full vote-bar-grow"
                   style={{
                     width: `${pct}%`,
-                    backgroundColor: isWinner ? agent.color : agent.color + "80",
+                    background: isWinner
+                      ? `linear-gradient(90deg, ${agent.color}, ${agent.color}CC)`
+                      : `linear-gradient(90deg, ${agent.color}80, ${agent.color}50)`,
                   }}
                 />
               </div>
@@ -73,7 +83,7 @@ export function VoteResults({
               <span className="flex-shrink-0">
                 {voter?.emoji} voted for {votedFor?.emoji}
               </span>
-              <span className="italic">"{vote.reason}"</span>
+              <span className="italic">&ldquo;{vote.reason}&rdquo;</span>
             </div>
           );
         })}

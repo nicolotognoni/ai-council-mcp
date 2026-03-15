@@ -32,7 +32,7 @@ class DebateStore {
   }
 
   /** Wait until at least one client is connected, with a timeout */
-  waitForClient(id: string, timeoutMs = 5000): Promise<void> {
+  waitForClient(id: string, timeoutMs = 15000): Promise<void> {
     const state = this.states.get(id);
     if (state && state.status === "running") return Promise.resolve();
     if (this.listeners.has(id) && this.listeners.get(id)!.size > 0) {
