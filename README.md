@@ -1,8 +1,10 @@
 <div align="center">
 
-# ♟️ AI Council MCP
+# AI Council MCP
 
 **A council of 5 AI agents debate your questions — then vote on the best answer.**
+
+**Integrates directly into ChatGPT's chat interface via OpenAI Apps SDK widgets.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green?logo=node.js)](https://nodejs.org/)
@@ -20,17 +22,17 @@
 
 <div align="center">
 
-<img src="docs/images/council-debate.png" alt="AI Council Debate - 5 agents debating with proposals from different LLM providers" width="700">
+<img src="docs/images/chatgpt-live-debate.png" alt="Live debate in ChatGPT - agents thinking in real-time with circle layout" width="700">
 
-*Five AI agents from different providers debate in structured rounds*
+*Live debate streaming directly inside ChatGPT — agents deliberate in real-time*
 
-<img src="docs/images/vote-results.png" alt="Vote Results - Agents vote and the winner is determined by majority" width="700">
+<img src="docs/images/chatgpt-vote-results.png" alt="Vote results and council members inside ChatGPT" width="700">
 
-*Agents vote on the best answer with detailed reasoning*
+*Vote results with animated bars and detailed reasoning from each agent*
 
-<img src="docs/images/winner-detail.png" alt="Winner Detail - The winning agent's full response" width="700">
+<img src="docs/images/chatgpt-winner-card.png" alt="Winner card and final answer inside ChatGPT" width="700">
 
-*The winning proposal with full strategic analysis*
+*The winning agent's response displayed as a rich interactive widget*
 
 </div>
 
@@ -38,15 +40,16 @@
 
 ## Features
 
+- **Native ChatGPT Integration** — Rich interactive widgets render directly in ChatGPT's chat via OpenAI Apps SDK
 - **Multi-Model Council** — 5 agents powered by OpenAI (GPT), Anthropic (Claude), and Google (Gemini)
-- **Structured Debate** — 4 rounds: Proposal → Critique → Counter-argument → Vote
-- **Live UI Widget** — Real-time React widget streams the debate via SSE
+- **Structured Debate** — 4 rounds: Proposal → Critique → Refinement → Vote
+- **Live Streaming UI** — Real-time React widget streams the debate via SSE with animated agent circle
 - **MCP Compatible** — Works with ChatGPT, Claude Desktop, and any MCP client
-- **One-Click Deploy** — Deploy to [Manufact Cloud](https://manufact.dev) or any Node.js host
+- **One-Click Deploy** — Deploy to [mcp-use Cloud](https://cloud.mcp-use.com) or any Node.js host
 
 ## How It Works
 
-You ask a question. Five AI agents with distinct roles debate it:
+You ask a question. Five AI agents with distinct roles debate it across structured rounds, then vote. The entire debate streams live as an interactive widget inside your chat.
 
 | Agent | Role | Provider |
 |-------|------|----------|
@@ -126,6 +129,8 @@ The server runs on `http://localhost:3000`. Open `http://localhost:3000/inspecto
 3. Enter the server URL (e.g. `http://localhost:3000/sse`)
 4. The `council-debate` tool will appear — ask any complex question!
 
+The debate renders as an interactive widget directly in the chat, powered by OpenAI Apps SDK.
+
 ### Claude Desktop
 
 Add to your `claude_desktop_config.json`:
@@ -148,7 +153,7 @@ Connect using the SSE transport at:
 http://localhost:3000/sse
 ```
 
-> **Tip:** Deploy to a public URL for persistent access. Use `npm run deploy` for [Manufact Cloud](https://manufact.dev), or host anywhere that supports Node.js.
+> **Tip:** Deploy to a public URL for persistent access. Use `npm run deploy` for [mcp-use Cloud](https://cloud.mcp-use.com), or host anywhere that supports Node.js.
 
 ---
 
@@ -163,7 +168,7 @@ http://localhost:3000/sse
 │   ├── llm.ts                # Multi-provider LLM abstraction (OpenAI, Anthropic, Google)
 │   └── types.ts              # TypeScript types
 ├── resources/
-│   ├── council-debate/       # React widget for live debate visualization
+│   ├── council-debate/       # React widget (OpenAI Apps SDK) for live debate
 │   │   ├── widget.tsx
 │   │   ├── components/       # UI components (AgentNode, VoteResults, etc.)
 │   │   ├── types.ts
@@ -175,7 +180,8 @@ http://localhost:3000/sse
 ## Tech Stack
 
 - **[mcp-use](https://mcp-use.com)** — MCP server framework with widget support
-- **React** + **Tailwind CSS** — Live debate widget
+- **[OpenAI Apps SDK](https://platform.openai.com/docs/apps)** — Native ChatGPT widget rendering
+- **React** + **Tailwind CSS** — Live debate widget with glassmorphism UI
 - **Zod** — Schema validation
 - **Hono** — HTTP/SSE streaming
 - **TypeScript** — End-to-end type safety
