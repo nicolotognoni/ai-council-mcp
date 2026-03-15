@@ -1,8 +1,8 @@
 {
-  "name": "mcp-demo",
+  "name": "ai-council-mcp",
   "type": "module",
   "version": "1.0.0",
-  "description": "MCP server: mcp-demo",
+  "description": "A council of AI agents debates complex questions across multiple rounds",
   "author": "",
   "license": "MIT",
   "keywords": [

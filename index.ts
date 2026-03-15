@@ -6,8 +6,8 @@ import { debateStore, hashQuestion } from "./council/debate-store.js";
 import type { DebateEvent } from "./council/types.js";
 
 const server = new MCPServer({
-  name: "council-mcp",
-  title: "Council MCP",
+  name: "ai-council-mcp",
+  title: "AI Council MCP",
   version: "1.0.0",
   description: "A council of AI agents debates complex questions across multiple rounds",
   baseUrl: process.env.MCP_URL || "http://localhost:3000",
