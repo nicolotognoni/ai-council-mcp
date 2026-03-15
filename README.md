@@ -1,12 +1,52 @@
-# AI Council MCP
+<div align="center">
 
-An MCP (Model Context Protocol) server that assembles a council of 5 AI agents — each powered by a different LLM and with a unique personality — to debate complex questions across multiple rounds, then vote on the best answer.
+# ♟️ AI Council MCP
 
-Built with [mcp-use](https://mcp-use.com) and compatible with ChatGPT, Claude, and any MCP-compatible client.
+**A council of 5 AI agents debate your questions — then vote on the best answer.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green?logo=node.js)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-purple)](https://modelcontextprotocol.io/)
+[![Built with mcp-use](https://img.shields.io/badge/Built%20with-mcp--use-orange)](https://mcp-use.com)
+
+[Features](#features) · [Demo](#demo) · [Quick Start](#quick-start) · [Connect](#connect-to-your-client) · [Architecture](#architecture) · [Deploy](#deployment)
+
+</div>
+
+---
+
+## Demo
+
+<div align="center">
+
+<img src="docs/images/council-debate.png" alt="AI Council Debate - 5 agents debating with proposals from different LLM providers" width="700">
+
+*Five AI agents from different providers debate in structured rounds*
+
+<img src="docs/images/vote-results.png" alt="Vote Results - Agents vote and the winner is determined by majority" width="700">
+
+*Agents vote on the best answer with detailed reasoning*
+
+<img src="docs/images/winner-detail.png" alt="Winner Detail - The winning agent's full response" width="700">
+
+*The winning proposal with full strategic analysis*
+
+</div>
+
+---
+
+## Features
+
+- **Multi-Model Council** — 5 agents powered by OpenAI (GPT), Anthropic (Claude), and Google (Gemini)
+- **Structured Debate** — 4 rounds: Proposal → Critique → Counter-argument → Vote
+- **Live UI Widget** — Real-time React widget streams the debate via SSE
+- **MCP Compatible** — Works with ChatGPT, Claude Desktop, and any MCP client
+- **One-Click Deploy** — Deploy to [Manufact Cloud](https://manufact.dev) or any Node.js host
 
 ## How It Works
 
-You ask a question. Five AI agents with distinct roles debate it across 4 structured rounds:
+You ask a question. Five AI agents with distinct roles debate it:
 
 | Agent | Role | Provider |
 |-------|------|----------|
@@ -18,18 +58,21 @@ You ask a question. Five AI agents with distinct roles debate it across 4 struct
 
 ### Debate Rounds
 
-1. **Proposal** — Each agent presents their initial answer
-2. **Critique** — Agents critique each other's proposals
-3. **Counter-argument** — Agents refine their positions based on critiques
-4. **Vote** — Each agent votes for the best answer (can't vote for themselves)
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  1. Proposal │───▶│  2. Critique │───▶│ 3. Refine   │───▶│   4. Vote   │
+│              │    │              │    │              │    │              │
+│ Each agent   │    │ Agents       │    │ Agents       │    │ Each agent   │
+│ presents     │    │ critique     │    │ refine their │    │ votes for    │
+│ their answer │    │ each other   │    │ positions    │    │ the best     │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+```
 
 The winner is determined by majority vote, with a tiebreaker round if needed.
 
-### Live UI Widget
+---
 
-The server includes a real-time React widget that streams the debate as it happens via SSE (Server-Sent Events), with animated agent responses, round progression, and vote visualization.
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
@@ -39,9 +82,15 @@ The server includes a real-time React widget that streams the debate as it happe
 ### Installation
 
 ```bash
+# Clone the repository
 git clone https://github.com/nicolotognoni/ai-council-mcp.git
 cd ai-council-mcp
+
+# Install dependencies
 npm install
+
+# Configure your API keys
+cp .env.example .env  # then edit .env with your keys
 ```
 
 ### Configuration
@@ -54,7 +103,7 @@ ANTHROPIC_API_KEY=your-anthropic-key
 GOOGLE_API_KEY=your-google-ai-key
 ```
 
-### Run the Server
+### Run
 
 ```bash
 # Development (auto-reload)
@@ -64,18 +113,20 @@ npm run dev
 npm run build && npm start
 ```
 
-The server runs on `http://localhost:3000` by default. Open `http://localhost:3000/inspector` to test it interactively.
+The server runs on `http://localhost:3000`. Open `http://localhost:3000/inspector` to test it interactively.
 
-## Connect to ChatGPT
+---
+
+## Connect to Your Client
+
+### ChatGPT
 
 1. Open [ChatGPT](https://chatgpt.com)
 2. Go to **Settings → MCP Servers → Add Server**
-3. Enter the server URL (e.g. `http://localhost:3000/sse` for local, or your deployed URL)
-4. The `council-debate` tool will appear in ChatGPT — ask any complex question and the council will debate it
+3. Enter the server URL (e.g. `http://localhost:3000/sse`)
+4. The `council-debate` tool will appear — ask any complex question!
 
-> **Tip:** Deploy to a public URL for persistent access. You can use `npm run deploy` to deploy on [Manufact Cloud](https://manufact.dev), or host it anywhere that supports Node.js.
-
-## Connect to Claude Desktop
+### Claude Desktop
 
 Add to your `claude_desktop_config.json`:
 
@@ -89,15 +140,19 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-## Connect to Any MCP Client
+### Any MCP Client
 
-This is a standard MCP server. Connect using the SSE transport at:
+Connect using the SSE transport at:
 
 ```
 http://localhost:3000/sse
 ```
 
-## Project Structure
+> **Tip:** Deploy to a public URL for persistent access. Use `npm run deploy` for [Manufact Cloud](https://manufact.dev), or host anywhere that supports Node.js.
+
+---
+
+## Architecture
 
 ```
 ├── index.ts                  # MCP server entry point & tool definition
@@ -117,14 +172,6 @@ http://localhost:3000/sse
 └── public/                   # Static assets (favicon, icon)
 ```
 
-## Deployment
-
-```bash
-npm run deploy
-```
-
-Or deploy manually to any Node.js hosting (Vercel, Railway, Fly.io, etc.) — just make sure to set the environment variables and expose the server URL.
-
 ## Tech Stack
 
 - **[mcp-use](https://mcp-use.com)** — MCP server framework with widget support
@@ -133,6 +180,28 @@ Or deploy manually to any Node.js hosting (Vercel, Railway, Fly.io, etc.) — ju
 - **Hono** — HTTP/SSE streaming
 - **TypeScript** — End-to-end type safety
 
+## Deployment
+
+```bash
+npm run deploy
+```
+
+Or deploy manually to any Node.js hosting (Vercel, Railway, Fly.io, etc.) — just make sure to set the environment variables.
+
+---
+
+<div align="center">
+
+## Contributing
+
+Contributions are welcome! Feel free to open an issue or submit a pull request.
+
 ## License
 
-MIT
+[MIT](LICENSE) — feel free to use this for your own projects.
+
+---
+
+Built with ☕ at [Turin AI Hackathon](https://github.com/nicolotognoni/ai-council-mcp)
+
+</div>
