@@ -53,28 +53,22 @@ export function LiveDebateView({ question }: { question: string }) {
 
     es.addEventListener("state", (e) => {
       const state = JSON.parse(e.data);
-      if (state.messages) setMessages(state.messages);
-      if (state.votes) setVotes(state.votes);
+      // State event now only carries status/currentRound (messages come as individual events)
       if (state.currentRound) setCurrentRound(state.currentRound);
-      if (state.status) {
-        setStatus(state.status);
-        if (state.status === "running") {
-          // Figure out which agents haven't responded in current round
-          const respondedInRound = new Set(
-            state.messages
-              .filter((m: LiveMessage) => m.round === state.currentRound)
-              .map((m: LiveMessage) => m.agentId)
-          );
-          setThinkingAgents(
-            new Set(agents.filter((a) => !respondedInRound.has(a.id)).map((a) => a.id))
-          );
-        }
+      if (state.status && state.status !== "waiting") {
+        setStatus(state.status === "waiting" ? "running" : state.status);
       }
     });
 
     es.addEventListener("agent-response", (e) => {
       const data = JSON.parse(e.data);
-      setMessages((prev) => [...prev, { agentId: data.agentId, content: data.content, round: data.round }]);
+      setStatus("running");
+      setMessages((prev) => {
+        // Avoid duplicates (catch-up + live events)
+        const exists = prev.some((m) => m.agentId === data.agentId && m.round === data.round);
+        if (exists) return prev;
+        return [...prev, { agentId: data.agentId, content: data.content, round: data.round }];
+      });
       setCurrentRound(data.round);
       setThinkingAgents((prev) => {
         const next = new Set(prev);
@@ -94,7 +88,11 @@ export function LiveDebateView({ question }: { question: string }) {
 
     es.addEventListener("vote-cast", (e) => {
       const data = JSON.parse(e.data);
-      setVotes((prev) => [...prev, { voterId: data.voterId, votedForId: data.votedForId, reason: data.reason }]);
+      setVotes((prev) => {
+        const exists = prev.some((v) => v.voterId === data.voterId);
+        if (exists) return prev;
+        return [...prev, { voterId: data.voterId, votedForId: data.votedForId, reason: data.reason }];
+      });
       setStatus("voting");
       setThinkingAgents((prev) => {
         const next = new Set(prev);
@@ -109,10 +107,7 @@ export function LiveDebateView({ question }: { question: string }) {
     });
 
     es.onerror = () => {
-      // On error, keep showing what we have
-      if (status === "connecting") {
-        // Retry will happen automatically with EventSource
-      }
+      // EventSource auto-retries; no action needed
     };
 
     return () => {

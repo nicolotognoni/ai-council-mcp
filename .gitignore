@@ -42,3 +42,16 @@ Thumbs.db
 *.swo
 *~
 
+# AI assistants & editors
+.claude/
+.cursor/
+.agent/
+.windsurf/
+.aider*
+.codeium/
+.continue/
+.copilot/
+CLAUDE.md
+.cursorrules
+.cursorignore
+

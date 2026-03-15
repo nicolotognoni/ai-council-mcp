@@ -6,15 +6,55 @@ class DebateStore {
   private states = new Map<string, LiveDebateState>();
   private listeners = new Map<string, Set<Listener>>();
   private cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readyResolvers = new Map<string, Array<() => void>>();
 
   createDebate(id: string): void {
     this.states.set(id, {
-      status: "running",
+      status: "waiting",
       currentRound: 1,
       messages: [],
       votes: [],
     });
     this.listeners.set(id, new Set());
+  }
+
+  /** Signal that a client has connected and is ready to receive events */
+  markReady(id: string): void {
+    const state = this.states.get(id);
+    if (state && state.status === "waiting") {
+      state.status = "running";
+    }
+    const resolvers = this.readyResolvers.get(id);
+    if (resolvers) {
+      for (const resolve of resolvers) resolve();
+      this.readyResolvers.delete(id);
+    }
+  }
+
+  /** Wait until at least one client is connected, with a timeout */
+  waitForClient(id: string, timeoutMs = 5000): Promise<void> {
+    const state = this.states.get(id);
+    if (state && state.status === "running") return Promise.resolve();
+    if (this.listeners.has(id) && this.listeners.get(id)!.size > 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        // Start anyway after timeout
+        const s = this.states.get(id);
+        if (s && s.status === "waiting") s.status = "running";
+        resolve();
+      }, timeoutMs);
+
+      if (!this.readyResolvers.has(id)) {
+        this.readyResolvers.set(id, []);
+      }
+      this.readyResolvers.get(id)!.push(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 
   getState(id: string): LiveDebateState | undefined {

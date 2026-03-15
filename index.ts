@@ -45,6 +45,9 @@ server.tool(
       const debateId = hashQuestion(question);
       debateStore.createDebate(debateId);
 
+      // Wait for the widget's SSE client to connect before starting the debate
+      await debateStore.waitForClient(debateId, 5000);
+
       const result = await runDebate(question, debateId);
 
       await ctx.reportProgress?.(100, 100, "Debate complete!");
@@ -90,29 +93,61 @@ server.tool(
 server.app.get("/api/debate-stream/:debateId", (c) => {
   const debateId = c.req.param("debateId");
   return streamSSE(c, async (stream) => {
-    // Send current state for catch-up
-    const state = debateStore.getState(debateId);
-    if (state) {
-      await stream.writeSSE({ event: "state", data: JSON.stringify(state) });
-    }
-
-    // If already complete, close immediately
-    if (state?.status === "complete") {
-      return;
-    }
-
-    // Subscribe to future events
+    // Subscribe to future events FIRST, before catch-up, to avoid missing anything
     const onEvent = async (event: DebateEvent) => {
       await stream.writeSSE({ event: event.type, data: JSON.stringify(event) });
     };
     debateStore.subscribe(debateId, onEvent);
 
+    // Send catch-up: replay individual events so the widget can animate them
+    const state = debateStore.getState(debateId);
+    if (state) {
+      // Replay each message as an individual agent-response event
+      for (const msg of state.messages) {
+        await stream.writeSSE({
+          event: "agent-response",
+          data: JSON.stringify({ agentId: msg.agentId, round: msg.round, content: msg.content }),
+        });
+      }
+
+      // Replay completed rounds
+      const completedRounds = new Set(state.messages.map((m) => m.round));
+      for (const round of [...completedRounds].sort()) {
+        const allAgentsResponded = state.messages.filter((m) => m.round === round).length >= 5;
+        if (allAgentsResponded) {
+          await stream.writeSSE({
+            event: "round-complete",
+            data: JSON.stringify({ round }),
+          });
+        }
+      }
+
+      // Replay votes
+      for (const vote of state.votes) {
+        await stream.writeSSE({
+          event: "vote-cast",
+          data: JSON.stringify(vote),
+        });
+      }
+
+      // Send status
+      await stream.writeSSE({
+        event: "state",
+        data: JSON.stringify({ status: state.status, currentRound: state.currentRound }),
+      });
+    }
+
+    // Signal the debate can start (client is connected)
+    debateStore.markReady(debateId);
+
+    // If already complete, close immediately
+    if (state?.status === "complete") {
+      debateStore.unsubscribe(debateId, onEvent);
+      return;
+    }
+
     // Wait for completion
     await new Promise<void>((resolve) => {
-      if (state?.status === "complete") {
-        resolve();
-        return;
-      }
       const check = (e: DebateEvent) => {
         if (e.type === "debate-complete") {
           debateStore.unsubscribe(debateId, check);

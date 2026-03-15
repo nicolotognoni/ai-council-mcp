@@ -41,7 +41,7 @@ export type DebateEvent =
   | { type: "debate-complete"; winnerId: string; winnerSummary: string };
 
 export interface LiveDebateState {
-  status: "running" | "voting" | "complete";
+  status: "waiting" | "running" | "voting" | "complete";
   currentRound: number;
   messages: Message[];
   votes: Vote[];
