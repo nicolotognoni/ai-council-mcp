@@ -45,8 +45,7 @@ export function LiveDebateView({ question }: { question: string }) {
 
   const connect = () => {
     const debateId = hashQuestion(question);
-    const baseUrl = (window.__mcpPublicUrl || "").replace(/\/$/, "");
-    const es = new EventSource(`${baseUrl}/api/debate-stream/${debateId}`);
+    const es = new EventSource(`/api/debate-stream/${debateId}`);
     eventSourceRef.current = es;
     setConnectionError(null);
     setStatus("connecting");
