@@ -89,7 +89,26 @@ server.tool(
   }
 );
 
-// SSE endpoint for live debate updates
+// Polling endpoint for live debate updates (SSE is buffered by ChatGPT proxy)
+server.app.get("/api/debate-state/:debateId", (c) => {
+  const debateId = c.req.param("debateId");
+  const state = debateStore.getState(debateId);
+  if (!state) {
+    return c.json({ status: "not-found" }, 404);
+  }
+  // First poll signals client readiness
+  debateStore.markReady(debateId);
+  return c.json({
+    status: state.status,
+    currentRound: state.currentRound,
+    messages: state.messages,
+    votes: state.votes,
+    winnerId: state.winnerId,
+    winnerSummary: state.winnerSummary,
+  });
+});
+
+// SSE endpoint for live debate updates (kept for local dev / non-ChatGPT hosts)
 server.app.get("/api/debate-stream/:debateId", (c) => {
   const debateId = c.req.param("debateId");
   return streamSSE(c, async (stream) => {

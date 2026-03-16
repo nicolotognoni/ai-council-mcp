@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import type { Agent } from "../types";
 import type { AgentStatus } from "./AgentNode";
 import { CircleLayout } from "./CircleLayout";
@@ -30,105 +30,77 @@ const AGENTS_FALLBACK: Agent[] = [
   { id: "philosopher", name: "The Philosopher", emoji: "🧘", role: "Ethical & Principled Thinker", provider: "anthropic", model: "claude-opus-4-6", color: "#8B5CF6" },
 ];
 
+const POLL_INTERVAL = 1500;
+
 export function LiveDebateView({ question }: { question: string }) {
   const [agents] = useState<Agent[]>(AGENTS_FALLBACK);
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [votes, setVotes] = useState<LiveVote[]>([]);
   const [currentRound, setCurrentRound] = useState(1);
   const [status, setStatus] = useState<"connecting" | "running" | "voting" | "complete" | "error">("connecting");
-  const [thinkingAgents, setThinkingAgents] = useState<Set<string>>(new Set());
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const retryCountRef = useRef(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const failCountRef = useRef(0);
 
-  const respondedCount = messages.filter((m) => m.round === currentRound).length;
+  const debateId = hashQuestion(question);
 
-  const connect = () => {
-    const debateId = hashQuestion(question);
-    const es = new EventSource(`/api/debate-stream/${debateId}`);
-    eventSourceRef.current = es;
-    setConnectionError(null);
-    setStatus("connecting");
-
-    es.onopen = () => {
-      retryCountRef.current = 0;
-    };
-
-    es.addEventListener("connected", () => {
-      setStatus("running");
-      setThinkingAgents(new Set(agents.map((a) => a.id)));
-    });
-
-    es.addEventListener("state", (e) => {
-      const state = JSON.parse(e.data);
-      if (state.currentRound) setCurrentRound(state.currentRound);
-      if (state.status && state.status !== "waiting") {
-        setStatus(state.status === "waiting" ? "running" : state.status);
+  const poll = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/debate-state/${debateId}`);
+      if (!res.ok) {
+        if (res.status === 404) return; // debate not created yet
+        throw new Error(`HTTP ${res.status}`);
       }
-    });
+      failCountRef.current = 0;
+      const state = await res.json();
 
-    es.addEventListener("agent-response", (e) => {
-      const data = JSON.parse(e.data);
-      setStatus("running");
-      setMessages((prev) => {
-        const exists = prev.some((m) => m.agentId === data.agentId && m.round === data.round);
-        if (exists) return prev;
-        return [...prev, { agentId: data.agentId, content: data.content, round: data.round }];
-      });
-      setCurrentRound(data.round);
-      setThinkingAgents((prev) => {
-        const next = new Set(prev);
-        next.delete(data.agentId);
-        return next;
-      });
-    });
+      setMessages(state.messages || []);
+      setVotes(state.votes || []);
+      setCurrentRound(state.currentRound || 1);
 
-    es.addEventListener("round-complete", (e) => {
-      const data = JSON.parse(e.data);
-      if (data.round < 3) {
-        setCurrentRound(data.round + 1);
-        setThinkingAgents(new Set(agents.map((a) => a.id)));
+      if (state.status === "waiting") {
+        setStatus("running");
+      } else if (state.status === "complete") {
+        setStatus("complete");
+        // Stop polling
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      } else {
+        setStatus(state.status === "voting" ? "voting" : "running");
       }
-    });
-
-    es.addEventListener("vote-cast", (e) => {
-      const data = JSON.parse(e.data);
-      setVotes((prev) => {
-        const exists = prev.some((v) => v.voterId === data.voterId);
-        if (exists) return prev;
-        return [...prev, { voterId: data.voterId, votedForId: data.votedForId, reason: data.reason }];
-      });
-      setStatus("voting");
-      setThinkingAgents((prev) => {
-        const next = new Set(prev);
-        next.delete(data.voterId);
-        return next;
-      });
-    });
-
-    es.addEventListener("debate-complete", () => {
-      setStatus("complete");
-      es.close();
-    });
-
-    es.onerror = () => {
-      retryCountRef.current++;
-      if (retryCountRef.current >= 5) {
-        es.close();
+    } catch {
+      failCountRef.current++;
+      if (failCountRef.current >= 5) {
         setStatus("error");
-        setConnectionError("Unable to connect to the debate stream. The server may be unavailable.");
+        setConnectionError("Unable to connect to the debate. The server may be unavailable.");
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
       }
-    };
-
-    return es;
-  };
+    }
+  }, [debateId]);
 
   useEffect(() => {
-    const es = connect();
+    // Initial poll
+    poll();
+    // Start polling interval
+    intervalRef.current = setInterval(poll, POLL_INTERVAL);
     return () => {
-      es.close();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
-  }, [question]);
+  }, [poll]);
+
+  // Compute which agents are still "thinking" (haven't responded in current round)
+  const respondedInRound = new Set(
+    messages.filter((m) => m.round === currentRound).map((m) => m.agentId)
+  );
+  const respondedCount = respondedInRound.size;
 
   // Build agent states map
   const agentStates = new Map<string, AgentState>();
@@ -146,15 +118,17 @@ export function LiveDebateView({ question }: { question: string }) {
           votedForEmoji: votedFor?.emoji,
         });
         continue;
-      } else if (thinkingAgents.has(agent.id)) {
+      } else if (!agentVote && status === "voting") {
         agentStatus = "voting";
       } else if (latestMessage) {
         agentStatus = "responded";
       }
-    } else if (thinkingAgents.has(agent.id)) {
+    } else if (status === "running" && !respondedInRound.has(agent.id) && messages.length > 0) {
       agentStatus = "thinking";
-    } else if (latestMessage) {
+    } else if (status === "running" && respondedInRound.has(agent.id)) {
       agentStatus = "responded";
+    } else if (status === "running") {
+      agentStatus = "thinking";
     }
 
     agentStates.set(agent.id, {
@@ -172,9 +146,11 @@ export function LiveDebateView({ question }: { question: string }) {
           <p className="text-sm text-secondary mb-4">{connectionError}</p>
           <button
             onClick={() => {
-              retryCountRef.current = 0;
-              eventSourceRef.current?.close();
-              connect();
+              failCountRef.current = 0;
+              setStatus("connecting");
+              setConnectionError(null);
+              poll();
+              intervalRef.current = setInterval(poll, POLL_INTERVAL);
             }}
             className="px-4 py-2 text-sm font-medium rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-colors cursor-pointer"
           >
