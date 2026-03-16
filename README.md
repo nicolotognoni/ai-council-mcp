@@ -208,6 +208,6 @@ Contributions are welcome! Feel free to open an issue or submit a pull request.
 
 ---
 
-Built with ☕ at [Turin AI Hackathon](https://github.com/nicolotognoni/ai-council-mcp)
+Built with ☕
 
 </div>
