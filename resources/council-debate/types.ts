@@ -25,11 +25,11 @@ const voteSchema = z.object({
 export const propsSchema = z.object({
   question: z.string(),
   agents: z.array(agentSchema),
-  rounds: z.array(z.array(messageSchema)),
-  votes: z.array(voteSchema),
-  winnerId: z.string(),
-  winnerSummary: z.string(),
-});
+  messages: z.array(messageSchema).optional().default([]),
+  votes: z.array(voteSchema).optional().default([]),
+  winnerId: z.string().optional().default(""),
+  winnerSummary: z.string().optional().default(""),
+}).passthrough();
 
 export type CouncilDebateProps = z.infer<typeof propsSchema>;
 export type Agent = z.infer<typeof agentSchema>;

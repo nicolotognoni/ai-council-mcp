@@ -6,6 +6,7 @@ interface AgentState {
   status: AgentStatus;
   preview?: string;
   votedForEmoji?: string;
+  animationDelay?: number;
 }
 
 const ROUND_LABELS = ["Proposal", "Critique", "Refinement", "Vote"];
@@ -116,6 +117,7 @@ export function CircleLayout({
               status={state.status}
               preview={state.preview}
               votedForEmoji={state.votedForEmoji}
+              animationDelay={state.animationDelay}
               style={{
                 left: x,
                 top: y,

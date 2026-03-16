@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { Agent } from "../types";
 
 export type AgentStatus = "waiting" | "thinking" | "responded" | "voting" | "voted";
@@ -9,17 +9,32 @@ export function AgentNode({
   preview,
   votedForEmoji,
   style,
+  animationDelay,
 }: {
   agent: Agent;
   status: AgentStatus;
   preview?: string;
   votedForEmoji?: string;
   style?: React.CSSProperties;
+  animationDelay?: number;
 }) {
   const isThinking = status === "thinking";
   const isResponded = status === "responded";
   const isVoting = status === "voting";
   const isVoted = status === "voted";
+
+  // Replay bounce-in animation when status transitions to responded/voted
+  const [animKey, setAnimKey] = useState(0);
+  const prevStatusRef = useRef(status);
+
+  useEffect(() => {
+    if (prevStatusRef.current !== status && (status === "responded" || status === "voted")) {
+      setAnimKey(k => k + 1);
+    }
+    prevStatusRef.current = status;
+  }, [status]);
+
+  const delayStyle = animationDelay ? { animationDelay: `${animationDelay}ms` } : undefined;
 
   return (
     <div className="absolute flex flex-col items-center" style={style}>
@@ -37,6 +52,7 @@ export function AgentNode({
           />
         )}
         <div
+          key={animKey}
           className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl border-2 transition-all duration-500 ${
             isResponded || isVoted ? "bounce-in scale-105" : ""
           }`}
@@ -44,6 +60,7 @@ export function AgentNode({
             borderColor: status === "waiting" ? "transparent" : agent.color,
             backgroundColor: agent.color + "15",
             boxShadow: isResponded || isVoted ? `0 0 24px ${agent.color}30` : "none",
+            ...delayStyle,
           }}
         >
           {agent.emoji}
@@ -67,6 +84,7 @@ export function AgentNode({
       {/* Preview bubble */}
       {isResponded && preview && (
         <div
+          key={`preview-${animKey}`}
           className="mt-1 max-w-[120px] text-[9px] text-secondary leading-tight px-2 py-1 rounded-lg border border-default/10 bg-surface-elevated line-clamp-2 fade-in"
         >
           {preview}
@@ -75,7 +93,7 @@ export function AgentNode({
 
       {/* Vote indicator */}
       {isVoted && votedForEmoji && (
-        <div className="mt-1 text-xs bounce-in">
+        <div key={`vote-${animKey}`} className="mt-1 text-xs bounce-in">
           &rarr; {votedForEmoji}
         </div>
       )}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useCallTool } from "mcp-use/react";
 import type { Agent } from "../types";
 import type { AgentStatus } from "./AgentNode";
 import { CircleLayout } from "./CircleLayout";
@@ -20,19 +21,39 @@ interface AgentState {
   status: AgentStatus;
   preview?: string;
   votedForEmoji?: string;
+  animationDelay?: number;
+}
+
+interface DebateStateResponse {
+  status: string;
+  currentRound: number;
+  messages: LiveMessage[];
+  votes: LiveVote[];
+  winnerId?: string;
+  winnerSummary?: string;
 }
 
 const AGENTS_FALLBACK: Agent[] = [
-  { id: "strategist", name: "The Strategist", emoji: "♟️", role: "Strategic Thinker", provider: "openai", model: "gpt-5.2", color: "#3B82F6" },
-  { id: "pragmatist", name: "The Pragmatist", emoji: "🔧", role: "Practical Problem Solver", provider: "anthropic", model: "claude-opus-4-6", color: "#10B981" },
-  { id: "critic", name: "The Critic", emoji: "🔍", role: "Devil's Advocate", provider: "google", model: "gemini-2.5-flash", color: "#EF4444" },
-  { id: "innovator", name: "The Innovator", emoji: "💡", role: "Creative Thinker", provider: "openai", model: "gpt-5.2", color: "#F59E0B" },
-  { id: "philosopher", name: "The Philosopher", emoji: "🧘", role: "Ethical & Principled Thinker", provider: "anthropic", model: "claude-opus-4-6", color: "#8B5CF6" },
+  { id: "strategist", name: "The Strategist", emoji: "\u265F\uFE0F", role: "Strategic Thinker", provider: "openai", model: "gpt-5.2", color: "#3B82F6" },
+  { id: "pragmatist", name: "The Pragmatist", emoji: "\uD83D\uDD27", role: "Practical Problem Solver", provider: "anthropic", model: "claude-opus-4-6", color: "#10B981" },
+  { id: "critic", name: "The Critic", emoji: "\uD83D\uDD0D", role: "Devil's Advocate", provider: "google", model: "gemini-2.5-flash", color: "#EF4444" },
+  { id: "innovator", name: "The Innovator", emoji: "\uD83D\uDCA1", role: "Creative Thinker", provider: "openai", model: "gpt-5.2", color: "#F59E0B" },
+  { id: "philosopher", name: "The Philosopher", emoji: "\uD83E\uDDD8", role: "Ethical & Principled Thinker", provider: "anthropic", model: "claude-opus-4-6", color: "#8B5CF6" },
 ];
 
-const POLL_INTERVAL = 1500;
+const POLL_INTERVAL_TOOL = 2000;
+const POLL_INTERVAL_FETCH = 1500;
 
-export function LiveDebateView({ question }: { question: string }) {
+// Detect if we're running inside a ChatGPT/OpenAI widget iframe
+function isInChatGPTWidget(): boolean {
+  try {
+    return typeof (window as any).openai !== "undefined";
+  } catch {
+    return false;
+  }
+}
+
+export function LiveDebateView({ question, debateId: debateIdProp }: { question: string; debateId?: string }) {
   const [agents] = useState<Agent[]>(AGENTS_FALLBACK);
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [votes, setVotes] = useState<LiveVote[]>([]);
@@ -42,34 +63,89 @@ export function LiveDebateView({ question }: { question: string }) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const failCountRef = useRef(0);
 
-  const debateId = hashQuestion(question);
+  const debateId = debateIdProp || hashQuestion(question);
+  const useTool = isInChatGPTWidget();
 
-  const poll = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/debate-state/${debateId}`);
-      if (!res.ok) {
-        if (res.status === 404) return; // debate not created yet
-        throw new Error(`HTTP ${res.status}`);
+  // useCallTool for ChatGPT widget polling
+  const { callToolAsync } = useCallTool<
+    { debateId: string },
+    { content: Array<{ type: string; text: string }> }
+  >("get-debate-state");
+
+  // Track previous counts/statuses for animation staggering
+  const prevMessageCountRef = useRef(0);
+  const prevVoteCountRef = useRef(0);
+  const prevAgentStatusRef = useRef<Map<string, AgentStatus>>(new Map());
+  const [newVoteStartIndex, setNewVoteStartIndex] = useState(0);
+  const [agentTransitions, setAgentTransitions] = useState<Map<string, number>>(new Map());
+
+  const applyState = useCallback((state: DebateStateResponse) => {
+    // Only update messages if there are new ones (preserve reference equality)
+    setMessages(prev => {
+      const incoming = state.messages || [];
+      if (incoming.length <= prev.length) return prev;
+      prevMessageCountRef.current = prev.length;
+      return incoming;
+    });
+
+    // Track new votes for stagger animation
+    setVotes(prev => {
+      const incoming = state.votes || [];
+      if (incoming.length <= prev.length) return prev;
+      setNewVoteStartIndex(prev.length);
+      prevVoteCountRef.current = prev.length;
+      return incoming;
+    });
+
+    setCurrentRound(state.currentRound || 1);
+
+    if (state.status === "waiting") {
+      setStatus("running");
+    } else if (state.status === "complete") {
+      setStatus("complete");
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
+    } else {
+      setStatus(state.status === "voting" ? "voting" : "running");
+    }
+  }, []);
+
+  // Poll via useCallTool (ChatGPT)
+  const pollViaTool = useCallback(async () => {
+    try {
+      const result = await callToolAsync({ debateId });
       failCountRef.current = 0;
-      const state = await res.json();
-
-      setMessages(state.messages || []);
-      setVotes(state.votes || []);
-      setCurrentRound(state.currentRound || 1);
-
-      if (state.status === "waiting") {
-        setStatus("running");
-      } else if (state.status === "complete") {
-        setStatus("complete");
-        // Stop polling
+      const text = result?.content?.[0]?.text;
+      if (!text) return;
+      const state: DebateStateResponse = JSON.parse(text);
+      if (state.status === "not-found") return;
+      applyState(state);
+    } catch {
+      failCountRef.current++;
+      if (failCountRef.current >= 5) {
+        setStatus("error");
+        setConnectionError("Unable to connect to the debate via tool calls.");
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
-      } else {
-        setStatus(state.status === "voting" ? "voting" : "running");
       }
+    }
+  }, [debateId, callToolAsync, applyState]);
+
+  // Poll via fetch (local dev / non-ChatGPT)
+  const pollViaFetch = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/debate-state/${debateId}`);
+      if (!res.ok) {
+        if (res.status === 404) return;
+        throw new Error(`HTTP ${res.status}`);
+      }
+      failCountRef.current = 0;
+      const state: DebateStateResponse = await res.json();
+      applyState(state);
     } catch {
       failCountRef.current++;
       if (failCountRef.current >= 5) {
@@ -81,20 +157,21 @@ export function LiveDebateView({ question }: { question: string }) {
         }
       }
     }
-  }, [debateId]);
+  }, [debateId, applyState]);
+
+  const poll = useTool ? pollViaTool : pollViaFetch;
+  const pollInterval = useTool ? POLL_INTERVAL_TOOL : POLL_INTERVAL_FETCH;
 
   useEffect(() => {
-    // Initial poll
     poll();
-    // Start polling interval
-    intervalRef.current = setInterval(poll, POLL_INTERVAL);
+    intervalRef.current = setInterval(poll, pollInterval);
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
     };
-  }, [poll]);
+  }, [poll, pollInterval]);
 
   // Compute which agents are still "thinking" (haven't responded in current round)
   const respondedInRound = new Set(
@@ -102,8 +179,9 @@ export function LiveDebateView({ question }: { question: string }) {
   );
   const respondedCount = respondedInRound.size;
 
-  // Build agent states map
+  // Build agent states map with transition tracking for staggered animations
   const agentStates = new Map<string, AgentState>();
+  let transitionIndex = 0;
   for (const agent of agents) {
     const agentMessages = messages.filter((m) => m.agentId === agent.id);
     const agentVote = votes.find((v) => v.voterId === agent.id);
@@ -113,10 +191,15 @@ export function LiveDebateView({ question }: { question: string }) {
     if (status === "voting" || status === "complete") {
       if (agentVote) {
         const votedFor = agents.find((a) => a.id === agentVote.votedForId);
+        const prevStatus = prevAgentStatusRef.current.get(agent.id);
+        const isNewTransition = prevStatus !== "voted";
         agentStates.set(agent.id, {
           status: "voted",
           votedForEmoji: votedFor?.emoji,
+          animationDelay: isNewTransition ? transitionIndex * 150 : undefined,
         });
+        if (isNewTransition) transitionIndex++;
+        prevAgentStatusRef.current.set(agent.id, "voted");
         continue;
       } else if (!agentVote && status === "voting") {
         agentStatus = "voting";
@@ -131,10 +214,16 @@ export function LiveDebateView({ question }: { question: string }) {
       agentStatus = "thinking";
     }
 
+    const prevStatus = prevAgentStatusRef.current.get(agent.id);
+    const isNewTransition = prevStatus !== agentStatus && agentStatus === "responded";
+
     agentStates.set(agent.id, {
       status: agentStatus,
       preview: latestMessage?.content.slice(0, 80),
+      animationDelay: isNewTransition ? transitionIndex * 150 : undefined,
     });
+    if (isNewTransition) transitionIndex++;
+    prevAgentStatusRef.current.set(agent.id, agentStatus);
   }
 
   if (status === "error" && connectionError) {
@@ -150,7 +239,7 @@ export function LiveDebateView({ question }: { question: string }) {
               setStatus("connecting");
               setConnectionError(null);
               poll();
-              intervalRef.current = setInterval(poll, POLL_INTERVAL);
+              intervalRef.current = setInterval(poll, pollInterval);
             }}
             className="px-4 py-2 text-sm font-medium rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-colors cursor-pointer"
           >
@@ -227,11 +316,15 @@ export function LiveDebateView({ question }: { question: string }) {
             const voter = agents.find((a) => a.id === vote.voterId);
             const votedFor = agents.find((a) => a.id === vote.votedForId);
             if (!voter || !votedFor) return null;
+            const isNewVote = i >= newVoteStartIndex;
             return (
               <div
                 key={i}
-                className="flex items-center gap-2 text-xs text-secondary px-3 py-1.5 rounded-lg fade-in"
-                style={{ backgroundColor: votedFor.color + "10" }}
+                className={`flex items-center gap-2 text-xs text-secondary px-3 py-1.5 rounded-lg ${isNewVote ? "fade-in" : ""}`}
+                style={{
+                  backgroundColor: votedFor.color + "10",
+                  ...(isNewVote ? { animationDelay: `${(i - newVoteStartIndex) * 150}ms`, animationFillMode: "both" } : {}),
+                }}
               >
                 <span className="text-base">{voter.emoji}</span>
                 <span className="font-medium text-default">{voter.name.replace("The ", "")}</span>

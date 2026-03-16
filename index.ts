@@ -1,4 +1,4 @@
-import { MCPServer, widget, text, error } from "mcp-use/server";
+import { MCPServer, widget, text } from "mcp-use/server";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { runDebate } from "./council/debate.js";
@@ -69,7 +69,10 @@ server.tool(
             model: a.model,
             color: a.color,
           })),
-          rounds: result.rounds,
+          messages: result.rounds.flat().map((m) => ({
+            ...m,
+            content: m.content.slice(0, 400),
+          })),
           votes: result.votes,
           winnerId: result.winnerId,
           winnerSummary: result.winnerSummary,
@@ -82,10 +85,58 @@ server.tool(
       });
     } catch (err) {
       console.error("Council debate failed:", err);
-      return error(
-        `Council debate failed: ${err instanceof Error ? err.message : "Unknown error"}`
-      );
+      return widget({
+        props: {
+          question,
+          agents: [],
+          messages: [],
+          votes: [],
+          winnerId: "",
+          winnerSummary: "",
+        },
+        output: text(
+          `Council debate failed: ${err instanceof Error ? err.message : "Unknown error"}`
+        ),
+      });
     }
+  }
+);
+
+// Tool-based polling for live debate updates (works inside ChatGPT iframe sandbox)
+server.tool(
+  {
+    name: "get-debate-state",
+    description:
+      "Get the current state of an ongoing council debate. Used by the widget for live updates.",
+    schema: z.object({
+      debateId: z.string().describe("The debate ID to poll"),
+    }),
+  },
+  async ({ debateId }) => {
+    const state = debateStore.getState(debateId);
+    if (!state) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ status: "not-found" }) }] };
+    }
+    // First tool call signals client readiness
+    debateStore.markReady(debateId);
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify({
+            status: state.status,
+            currentRound: state.currentRound,
+            messages: state.messages.map((m) => ({
+              ...m,
+              content: m.content.slice(0, 100),
+            })),
+            votes: state.votes,
+            winnerId: state.winnerId,
+            winnerSummary: state.winnerSummary,
+          }),
+        },
+      ],
+    };
   }
 );
 

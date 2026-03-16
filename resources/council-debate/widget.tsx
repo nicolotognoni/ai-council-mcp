@@ -8,6 +8,7 @@ import { RoundTimeline } from "./components/RoundTimeline";
 import { VoteResults } from "./components/VoteResults";
 import { WinnerCard } from "./components/WinnerCard";
 import { propsSchema, type CouncilDebateProps } from "./types";
+import { hashQuestion } from "./utils/hash";
 
 export const widgetMetadata: WidgetMetadata = {
   description:
@@ -21,35 +22,104 @@ export const widgetMetadata: WidgetMetadata = {
   },
 };
 
-export default function CouncilDebate() {
+class DebugErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("[council-debate] ErrorBoundary caught:", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="bg-surface-elevated border border-default rounded-3xl p-8">
+          <div className="text-center py-8">
+            <div className="text-3xl mb-3">&#x26A0;&#xFE0F;</div>
+            <h3 className="text-base font-semibold text-default mb-2">
+              Widget Error
+            </h3>
+            <p className="text-sm text-secondary mb-2">
+              {this.state.error.message}
+            </p>
+            <pre className="text-xs text-secondary overflow-auto max-h-32 text-left mx-4 p-2 bg-surface rounded-lg">
+              {this.state.error.stack}
+            </pre>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function CouncilDebateInner() {
   const { props, isPending, toolInput } = useWidget<CouncilDebateProps>();
   const [activeRound, setActiveRound] = useState(0);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(
     new Set()
   );
 
+  console.log("[council-debate] render — isPending:", isPending, "hasProps:", !!props, "hasAgents:", !!props?.agents, "toolInput:", JSON.stringify(toolInput));
+
   if (isPending) {
     const question = (toolInput as { question?: string })?.question;
 
     if (question) {
+      const debateId = hashQuestion(question);
       return (
         <McpUseProvider autoSize>
-          <LiveDebateView question={question} />
+          <div className="min-h-[200px]">
+            <LiveDebateView question={question} debateId={debateId} />
+          </div>
         </McpUseProvider>
       );
     }
 
     return (
       <McpUseProvider autoSize>
-        <div className="bg-surface-elevated border border-default rounded-3xl p-8">
-          <div className="text-center py-12">
-            <div className="text-4xl mb-4 animate-bounce">&#9878;&#65039;</div>
-            <h3 className="text-lg font-semibold text-default mb-2">
-              Assembling the Council...
-            </h3>
-            <p className="text-sm text-secondary">
-              5 AI agents are debating across 4 rounds
-            </p>
+        <div className="min-h-[200px]">
+          <div className="bg-surface-elevated border border-default rounded-3xl p-8">
+            <div className="text-center py-12">
+              <div className="text-4xl mb-4 animate-bounce">&#9878;&#65039;</div>
+              <h3 className="text-lg font-semibold text-default mb-2">
+                Assembling the Council...
+              </h3>
+              <p className="text-sm text-secondary">
+                5 AI agents are debating across 4 rounds
+              </p>
+            </div>
+          </div>
+        </div>
+      </McpUseProvider>
+    );
+  }
+
+  // Defensive: if props are completely missing, show fallback
+  if (!props?.agents) {
+    console.error("[council-debate] props or props.agents is null/undefined — props:", JSON.stringify(props));
+    return (
+      <McpUseProvider autoSize>
+        <div className="min-h-[200px]">
+          <div className="bg-surface-elevated border border-default rounded-3xl p-8">
+            <div className="text-center py-8">
+              <div className="text-3xl mb-3">&#9878;&#65039;</div>
+              <h3 className="text-lg font-semibold text-default mb-2">
+                Council Debate Complete
+              </h3>
+              <p className="text-sm text-secondary mt-2">
+                The debate results could not be displayed.
+              </p>
+              <p className="text-xs text-secondary mt-2">
+                props: {props ? "present" : "null"}, agents: {props?.agents ? String(props.agents.length) : "missing"}
+              </p>
+            </div>
           </div>
         </div>
       </McpUseProvider>
@@ -60,7 +130,7 @@ export default function CouncilDebate() {
   console.log("[council-debate] isPending=false, props:", JSON.stringify({
     question: props.question,
     agentsCount: props.agents?.length,
-    roundsCount: props.rounds?.length,
+    messagesCount: props.messages?.length,
     votesCount: props.votes?.length,
     winnerId: props.winnerId,
     hasWinnerSummary: !!props.winnerSummary,
@@ -69,27 +139,34 @@ export default function CouncilDebate() {
   // Defensive: if props are missing/incomplete, show fallback instead of crashing
   const question = props.question || "";
   const agents = props.agents || [];
-  const rounds = props.rounds || [];
+  const messages = props.messages || [];
   const votes = props.votes || [];
   const winnerId = props.winnerId || "";
   const winnerSummary = props.winnerSummary || "";
 
   const winnerAgent = agents.find((a) => a.id === winnerId);
   const voteCount = votes.filter((v) => v.votedForId === winnerId).length;
-  const currentRound = rounds[activeRound] || [];
+
+  // Derive rounds from flat messages
+  const totalRounds = new Set(messages.map((m) => m.round)).size || 1;
+  const currentRoundMessages = messages.filter(
+    (m) => m.round === activeRound + 1
+  );
 
   if (!winnerAgent || agents.length === 0) {
     console.error("[council-debate] Missing data - winnerAgent:", winnerAgent, "agents:", agents.length, "winnerId:", winnerId);
     return (
       <McpUseProvider autoSize>
-        <div className="bg-surface-elevated border border-default rounded-3xl p-8">
-          <div className="text-center py-8">
-            <h3 className="text-lg font-semibold text-default mb-2">
-              Council Debate Complete
-            </h3>
-            {winnerSummary && (
-              <p className="text-sm text-secondary mt-4">{winnerSummary}</p>
-            )}
+        <div className="min-h-[200px]">
+          <div className="bg-surface-elevated border border-default rounded-3xl p-8">
+            <div className="text-center py-8">
+              <h3 className="text-lg font-semibold text-default mb-2">
+                Council Debate Complete
+              </h3>
+              {winnerSummary && (
+                <p className="text-sm text-secondary mt-4">{winnerSummary}</p>
+              )}
+            </div>
           </div>
         </div>
       </McpUseProvider>
@@ -107,7 +184,7 @@ export default function CouncilDebate() {
 
   return (
     <McpUseProvider autoSize>
-      <div className="bg-surface-elevated border border-default rounded-3xl overflow-hidden">
+      <div className="min-h-[200px] bg-surface-elevated border border-default rounded-3xl overflow-hidden">
         {/* Header */}
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-center gap-2 mb-1">
@@ -116,7 +193,7 @@ export default function CouncilDebate() {
             </span>
             <span className="text-xs text-secondary">&middot;</span>
             <span className="text-xs text-secondary">
-              {agents.length} agents &middot; {rounds.length} rounds
+              {agents.length} agents &middot; {totalRounds} rounds
             </span>
           </div>
           <h2 className="text-xl font-bold text-default leading-snug">
@@ -139,7 +216,7 @@ export default function CouncilDebate() {
         {/* Messages */}
         <div className="py-3">
           {activeRound < 3 ? (
-            currentRound.map((message) => {
+            currentRoundMessages.map((message) => {
               const agent = agents.find((a) => a.id === message.agentId);
               if (!agent) return null;
               const key = `${message.round}-${message.agentId}`;
@@ -174,5 +251,13 @@ export default function CouncilDebate() {
         />
       </div>
     </McpUseProvider>
+  );
+}
+
+export default function CouncilDebate() {
+  return (
+    <DebugErrorBoundary>
+      <CouncilDebateInner />
+    </DebugErrorBoundary>
   );
 }
