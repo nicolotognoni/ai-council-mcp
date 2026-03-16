@@ -56,10 +56,45 @@ export default function CouncilDebate() {
     );
   }
 
-  const { question, agents, rounds, votes, winnerId, winnerSummary } = props;
-  const winnerAgent = agents.find((a) => a.id === winnerId)!;
+  // Debug: log received props to help diagnose widget crashes
+  console.log("[council-debate] isPending=false, props:", JSON.stringify({
+    question: props.question,
+    agentsCount: props.agents?.length,
+    roundsCount: props.rounds?.length,
+    votesCount: props.votes?.length,
+    winnerId: props.winnerId,
+    hasWinnerSummary: !!props.winnerSummary,
+  }));
+
+  // Defensive: if props are missing/incomplete, show fallback instead of crashing
+  const question = props.question || "";
+  const agents = props.agents || [];
+  const rounds = props.rounds || [];
+  const votes = props.votes || [];
+  const winnerId = props.winnerId || "";
+  const winnerSummary = props.winnerSummary || "";
+
+  const winnerAgent = agents.find((a) => a.id === winnerId);
   const voteCount = votes.filter((v) => v.votedForId === winnerId).length;
   const currentRound = rounds[activeRound] || [];
+
+  if (!winnerAgent || agents.length === 0) {
+    console.error("[council-debate] Missing data - winnerAgent:", winnerAgent, "agents:", agents.length, "winnerId:", winnerId);
+    return (
+      <McpUseProvider autoSize>
+        <div className="bg-surface-elevated border border-default rounded-3xl p-8">
+          <div className="text-center py-8">
+            <h3 className="text-lg font-semibold text-default mb-2">
+              Council Debate Complete
+            </h3>
+            {winnerSummary && (
+              <p className="text-sm text-secondary mt-4">{winnerSummary}</p>
+            )}
+          </div>
+        </div>
+      </McpUseProvider>
+    );
+  }
 
   const toggleMessage = (key: string) => {
     setExpandedMessages((prev) => {
