@@ -22,7 +22,7 @@ export const widgetMetadata: WidgetMetadata = {
 };
 
 export default function CouncilDebate() {
-  const { props, isPending, toolInput } = useWidget<CouncilDebateProps>();
+  const { props, isPending, toolInput, mcp_url } = useWidget<CouncilDebateProps>();
   const [activeRound, setActiveRound] = useState(0);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(
     new Set()
@@ -34,7 +34,7 @@ export default function CouncilDebate() {
     if (question) {
       return (
         <McpUseProvider autoSize>
-          <LiveDebateView question={question} />
+          <LiveDebateView question={question} mcpUrl={mcp_url} />
         </McpUseProvider>
       );
     }

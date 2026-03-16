@@ -30,7 +30,7 @@ const AGENTS_FALLBACK: Agent[] = [
   { id: "philosopher", name: "The Philosopher", emoji: "🧘", role: "Ethical & Principled Thinker", provider: "anthropic", model: "claude-opus-4-6", color: "#8B5CF6" },
 ];
 
-export function LiveDebateView({ question }: { question: string }) {
+export function LiveDebateView({ question, mcpUrl }: { question: string; mcpUrl?: string }) {
   const [agents] = useState<Agent[]>(AGENTS_FALLBACK);
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [votes, setVotes] = useState<LiveVote[]>([]);
@@ -45,7 +45,8 @@ export function LiveDebateView({ question }: { question: string }) {
 
   const connect = () => {
     const debateId = hashQuestion(question);
-    const es = new EventSource(`/api/debate-stream/${debateId}`);
+    const baseUrl = mcpUrl ? mcpUrl.replace(/\/$/, "") : "";
+    const es = new EventSource(`${baseUrl}/api/debate-stream/${debateId}`);
     eventSourceRef.current = es;
     setConnectionError(null);
     setStatus("connecting");
@@ -128,7 +129,7 @@ export function LiveDebateView({ question }: { question: string }) {
     return () => {
       es.close();
     };
-  }, [question]);
+  }, [question, mcpUrl]);
 
   // Build agent states map
   const agentStates = new Map<string, AgentState>();
