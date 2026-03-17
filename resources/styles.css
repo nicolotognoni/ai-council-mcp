@@ -1,3 +1,4 @@
+@import "tailwindcss";
 @import "@openai/apps-sdk-ui/css";
 
 /* Configure Tailwind v4 to scan for classes */
